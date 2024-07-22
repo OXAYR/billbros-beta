@@ -5,6 +5,10 @@ import {
   Pressable,
   View,
   ActivityIndicator,
+  TextInput,
+  Button,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import Text from '../../../Components/Text';
 import InputField from '../../../Components/InputField';
@@ -15,9 +19,16 @@ import {colors} from '../../../Constants';
 
 const Payment = ({navigation}) => {
   const [users, setUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState({});
+  const [selectedParticipants, setSelectedParticipants] = useState([
+    {currentUser},
+  ]);
+  const [highlightedUsers, setHighlightedUsers] = useState([]);
+  const [totalBill, setTotalBill] = useState('');
+  const [splitAmount, setSplitAmount] = useState(0);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -25,15 +36,21 @@ const Payment = ({navigation}) => {
         setLoading(true);
 
         const currentUser = firebase.auth().currentUser;
+        setCurrentUser(currentUser);
         if (currentUser) {
           const usersSnapshot = await firebase
             .firestore()
             .collection('users')
             .get();
+          console.log(
+            'here are the user snapchot data-------------->',
+            usersSnapshot.docs,
+          );
           const usersData = usersSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
           }));
+          console.log('herea re the users------>', usersData);
           const allUsers = usersData.filter(
             user => user.id !== currentUser.uid,
           );
@@ -82,7 +99,59 @@ const Payment = ({navigation}) => {
 
   const handleUserPress = userId => {
     const selectedUser = users.find(user => user.id === userId);
-    navigation.navigate('Chat', {selectedUser});
+    // navigation.navigate('Chat', {selectedUser});
+
+    if (selectedParticipants.length < 4) {
+      if (!selectedParticipants.find(user => user.id === userId)) {
+        setSelectedParticipants([...selectedParticipants, selectedUser]);
+      } else {
+        setSelectedParticipants(
+          selectedParticipants.filter(user => user.id !== userId),
+        );
+      }
+    } else {
+      if (selectedParticipants.find(user => user.id === userId)) {
+        setSelectedParticipants(
+          selectedParticipants.filter(user => user.id !== userId),
+        );
+      } else {
+        Alert.alert('Maximum 4 participants allowed');
+      }
+    }
+  };
+
+  const handleUserLongPress = userId => {
+    if (highlightedUsers.includes(userId)) {
+      setHighlightedUsers(highlightedUsers.filter(id => id !== userId));
+    } else {
+      setHighlightedUsers([...highlightedUsers, userId]);
+    }
+  };
+
+  const handleBillChange = value => {
+    setTotalBill(value);
+    console.log(
+      'her ar ethe calue ----->',
+      value,
+      value / selectedParticipants.length,
+    );
+    if (selectedParticipants.length > 0) {
+      setSplitAmount((value / selectedParticipants.length).toFixed(2));
+    } else {
+      setSplitAmount(0);
+    }
+  };
+
+  const handleCreateGroup = () => {
+    if (selectedParticipants.length > 0) {
+      navigation.navigate('Chat', {
+        selectedParticipants,
+        totalBill,
+        splitAmount,
+      });
+    } else {
+      Alert.alert('Please select at least one participant');
+    }
   };
 
   const getLastMessage = async userId => {
@@ -141,6 +210,32 @@ const Payment = ({navigation}) => {
       <Text style={styles.friendsText}>Friends</Text>
       <Text style={styles.accountText}>Selected User Accounts</Text>
 
+      <TextInput
+        style={styles.billInput}
+        placeholder="Enter total bill"
+        keyboardType="numeric"
+        value={totalBill}
+        onChangeText={handleBillChange}
+      />
+
+      {selectedParticipants.length > 0 && (
+        <View>
+          <Text style={styles.splitText}>Split Amount: ${splitAmount}</Text>
+          <FlatList
+            data={selectedParticipants}
+            renderItem={({item}) => (
+              <View style={styles.participantView}>
+                <Text style={styles.participantName}>
+                  {item.name || item.username}
+                </Text>
+                <Text style={styles.participantAmount}>${splitAmount}</Text>
+              </View>
+            )}
+            keyExtractor={item => item.id}
+          />
+        </View>
+      )}
+
       {loading ? (
         <ActivityIndicator
           style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}
@@ -153,7 +248,11 @@ const Payment = ({navigation}) => {
           renderItem={({item}) => (
             <Pressable
               onPress={() => handleUserPress(item.id)}
-              style={styles.chatView}>
+              onLongPress={() => handleUserLongPress(item.id)}
+              style={[
+                styles.chatView,
+                highlightedUsers.includes(item.id) && styles.highlighted,
+              ]}>
               <Image
                 resizeMode="center"
                 style={styles.chatImage}
@@ -196,6 +295,10 @@ const Payment = ({navigation}) => {
           keyExtractor={item => item.id}
         />
       )}
+
+      <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
+        <Text style={styles.createButtonText}>Create Group Chat</Text>
+      </TouchableOpacity>
     </View>
   );
 };

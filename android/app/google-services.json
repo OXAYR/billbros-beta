@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "128522730079",
+    "firebase_url": "https://billbrosv02-default-rtdb.firebaseio.com",
+    "project_id": "billbrosv02",
+    "storage_bucket": "billbrosv02.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:128522730079:android:10fc42b7b65722de4079ea",
+        "android_client_info": {
+          "package_name": "com.billbros"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJ_1w1KbuY8rzy_hyBJIH0fgT0O48jV28"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

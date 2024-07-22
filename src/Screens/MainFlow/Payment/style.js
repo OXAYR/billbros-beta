@@ -125,4 +125,52 @@ export const styles = StyleSheet.create({
   },
 
   ///ozziee
+
+  billInput: {
+    borderWidth: 1,
+    borderColor: colors.gray,
+    borderRadius: 8,
+    padding: 10,
+    margin: 10,
+    fontSize: 16,
+    color: colors.darkText,
+  },
+  splitText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 10,
+    color: colors.primary,
+  },
+  participantView: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 10,
+    marginHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  participantName: {
+    fontSize: 16,
+    color: colors.darkText,
+  },
+  participantAmount: {
+    fontSize: 16,
+    color: colors.primary,
+  },
+  highlighted: {
+    backgroundColor: colors.lightPrimary,
+  },
+  createButton: {
+    margin: 20,
+    padding: 15,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  createButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });

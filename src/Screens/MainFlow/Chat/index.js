@@ -1,29 +1,39 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {GiftedChat, Bubble} from 'react-native-gifted-chat';
+import {
+  GiftedChat,
+  Bubble,
+  InputToolbar,
+  Composer,
+} from 'react-native-gifted-chat';
 import {firebase} from '../../../../firebase';
 import {
   StyleSheet,
-  Image,
   View,
-  ImageBackground,
   ActivityIndicator,
+  TouchableOpacity,
+  Text,
 } from 'react-native';
-import {
-  heightPercentageToDP,
-  widthPercentageToDP,
-} from 'react-native-responsive-screen';
 import Header from '../../../Components/Header';
 import {colors} from '../../../Constants';
+import Modal from 'react-native-modal';
+import {CreditCardInput} from 'react-native-credit-card-input';
 
 const ChatScreen = ({route, navigation}) => {
-  //   console.log('here is the firebase quth------->', firebase);
-  const {selectedUser} = route.params;
+  const {selectedParticipants, totalBill, splitAmount} = route.params;
   const [messages, setMessages] = useState([]);
-  const currentUser = firebase.auth().currentUser;
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const currentUser = firebase.auth().currentUser;
 
   useEffect(() => {
-    const chatId = [currentUser.uid, selectedUser.id].sort().join('_');
+    const userIds = selectedParticipants
+      .map(user => user.id)
+      .sort()
+      .join('_');
+
+    const chatId = `${currentUser.uid}_${userIds}`;
+
     const unsubscribe = firebase
       .firestore()
       .collection('chats')
@@ -31,6 +41,7 @@ const ChatScreen = ({route, navigation}) => {
       .collection('messages')
       .orderBy('createdAt', 'desc')
       .onSnapshot(snapshot => {
+        console.log('here are the snapshot of the chat---->', snapshot);
         const messagesList = snapshot.docs.map(doc => ({
           _id: doc.id,
           text: doc.data().text,
@@ -43,90 +54,115 @@ const ChatScreen = ({route, navigation}) => {
           },
         }));
         setMessages(messagesList);
-        setLoadingMessages(false); // Set loading to false after messages are fetched
+        setLoadingMessages(false);
       });
+    console.log('here are the unsubscribe------>', unsubscribe);
 
     return () => unsubscribe();
-  }, []);
+  }, [navigation]);
 
-  const onSend = useCallback((messages = []) => {
-    const chatId = [currentUser.uid, selectedUser.id].sort().join('_');
-    const message = messages[0];
-    firebase
-      .firestore()
-      .collection('chats')
-      .doc(chatId)
-      .collection('messages')
-      .add({
-        text: message.text,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        user: {
-          id: currentUser.uid,
-          name: currentUser.displayName,
-        },
-        read: false, // Add read status
-      });
-    setMessages(previousMessages =>
-      GiftedChat.append(previousMessages, messages),
-    );
-  }, []);
+  const onSend = useCallback(
+    (messages = []) => {
+      const userIds = selectedParticipants
+        .map(user => user.id)
+        .sort()
+        .join('_');
+      const chatId = `${currentUser.uid}_${userIds}`;
+      const message = messages[0];
+      firebase
+        .firestore()
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .add({
+          text: message.text,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          user: {
+            id: currentUser.uid,
+            name: currentUser.displayName,
+          },
+        });
+    },
+    [selectedParticipants],
+  );
 
-  const renderBubble = props => {
-    return (
-      <Bubble
-        {...props}
-        wrapperStyle={{
-          left: styles.leftBubble,
-          right: styles.rightBubble,
-        }}
-        textStyle={{
-          left: styles.leftBubbleText,
-          right: styles.rightBubbleText,
-        }}
-      />
-    );
+  const toggleModal = () => {
+    setModalVisible(!isModalVisible);
   };
 
-  // const renderAvatar = (props) => {
-  //     const { user } = props.currentMessage;
-  //     const avatarSource = user._id === currentUser.uid
-  //         ? require('../../../../assets/images/profile_focused.png')
-  //         : require('../../../../assets/images/profile_unfocused.png');
+  const handleCardInput = formData => {
+    // Handle the card input data here
+    console.log('Card Data:', formData);
+    // toggleModal(); // Close modal after handling
+  };
 
-  //     return (
-  //         <Image
-  //             source={avatarSource}
-  //             style={styles.avatar}
-  //         />
-  //     );
-  // };
+  const handleInputTextChange = text => {
+    setInputText(text);
+  };
+
+  const renderInputToolbar = props => (
+    <View style={styles.inputContainer}>
+      <InputToolbar {...props} containerStyle={{flex: 1}} />
+      {inputText === '' && (
+        <TouchableOpacity style={styles.payButton} onPress={toggleModal}>
+          <Text style={styles.payButtonText}>Pay</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderComposer = props => (
+    <Composer {...props} onTextChanged={handleInputTextChange} />
+  );
+
   return (
     <View style={styles.container}>
       <Header
-        title={selectedUser.username}
+        title={`Group Chat ${totalBill}`}
         onPress={() => navigation.goBack()}
       />
-      <ImageBackground
-        source={require('../../../../assets/images/chat_bg.jpg')} // replace with your background image path
-        style={styles.backgroundImage}>
-        {loadingMessages ? (
-          <ActivityIndicator
-            size={50}
-            color={colors.primary}
-            style={styles.loadingIndicator}
-          />
-        ) : (
-          <GiftedChat
-            messages={messages}
-            onSend={messages => onSend(messages)}
-            user={{
-              _id: currentUser.uid,
-              name: currentUser.displayName,
-            }}
-            renderBubble={renderBubble}
-          />
-        )}
-      </ImageBackground>
+      {loadingMessages ? (
+        <ActivityIndicator
+          style={styles.loadingIndicator}
+          size={50}
+          color={colors.primary}
+        />
+      ) : (
+        <GiftedChat
+          messages={messages}
+          onSend={messages => onSend(messages)}
+          user={{
+            _id: currentUser.uid,
+            name: currentUser.displayName,
+          }}
+          renderBubble={props => {
+            console.log('here are the props----->', props);
+            return (
+              <Bubble
+                {...props}
+                wrapperStyle={{
+                  left: {backgroundColor: '#f0f0f0'},
+                  right: {backgroundColor: '#0078fe'},
+                }}
+                textStyle={{
+                  left: {color: '#000'},
+                  right: {color: '#fff'},
+                }}
+              />
+            );
+          }}
+          renderInputToolbar={renderInputToolbar}
+          renderComposer={renderComposer}
+        />
+      )}
+      <Modal isVisible={isModalVisible} onBackdropPress={toggleModal}>
+        <View style={styles.modalContent}>
+          <CreditCardInput onChange={handleCardInput} />
+          <TouchableOpacity style={styles.submitButton} onPress={toggleModal}>
+            <Text style={styles.submitButtonText}>Submit</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -136,38 +172,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
-  backgroundImage: {
-    flex: 1,
-  },
-  leftBubble: {
-    marginVertical: heightPercentageToDP(0.2),
-    marginHorizontal: widthPercentageToDP(-10),
-    backgroundColor: '#e1ffc7',
-  },
-  rightBubble: {
-    marginVertical: heightPercentageToDP(0.2),
-    marginHorizontal: widthPercentageToDP(1),
-    backgroundColor: '#007aff',
-  },
-  leftBubbleText: {
-    textAlign: 'left',
-    color: '#000',
-  },
-  rightBubbleText: {
-    color: '#fff',
-  },
   loadingIndicator: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // avatar: {
-  //     width: 40,
-  //     height: 40,
-  //     borderRadius: 20,
-  //     marginRight: 8, // Space between avatar and bubble
-  //     marginLeft: 8,
-  // },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  payButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+  },
+  payButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  submitButton: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
 
 export default ChatScreen;
