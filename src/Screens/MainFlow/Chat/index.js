@@ -1,10 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {
-  GiftedChat,
-  Bubble,
-  InputToolbar,
-  Composer,
-} from 'react-native-gifted-chat';
+import {GiftedChat, Bubble, InputToolbar} from 'react-native-gifted-chat';
 import {firebase} from '../../../../firebase';
 import {
   StyleSheet,
@@ -17,23 +12,27 @@ import Header from '../../../Components/Header';
 import {colors} from '../../../Constants';
 import Modal from 'react-native-modal';
 import {CreditCardInput} from 'react-native-credit-card-input';
+import {useDispatch, useSelector} from 'react-redux';
+import {
+  confirmPaymentIntent,
+  createPaymentIntent,
+} from '../../../Redux/stripeThunks';
+import {StripeProvider, useStripe} from '@stripe/stripe-react-native';
 
 const ChatScreen = ({route, navigation}) => {
-  const {selectedParticipants, totalBill, splitAmount} = route.params;
+  const dispatch = useDispatch();
+  const {stripe, loading, error} = useSelector(state => state.stripe);
+  const {selectedParticipants, totalBill, id} = route.params;
+  console.log('here are the route----->', route.params);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [isModalVisible, setModalVisible] = useState(false);
-  const [inputText, setInputText] = useState('');
+
   const currentUser = firebase.auth().currentUser;
+  const {createPaymentMethod} = useStripe();
+  const chatId = id;
 
   useEffect(() => {
-    const userIds = selectedParticipants
-      .map(user => user.id)
-      .sort()
-      .join('_');
-
-    const chatId = `${currentUser.uid}_${userIds}`;
-
     const unsubscribe = firebase
       .firestore()
       .collection('chats')
@@ -41,7 +40,6 @@ const ChatScreen = ({route, navigation}) => {
       .collection('messages')
       .orderBy('createdAt', 'desc')
       .onSnapshot(snapshot => {
-        console.log('here are the snapshot of the chat---->', snapshot);
         const messagesList = snapshot.docs.map(doc => ({
           _id: doc.id,
           text: doc.data().text,
@@ -56,18 +54,12 @@ const ChatScreen = ({route, navigation}) => {
         setMessages(messagesList);
         setLoadingMessages(false);
       });
-    console.log('here are the unsubscribe------>', unsubscribe);
 
     return () => unsubscribe();
-  }, [navigation]);
+  }, [chatId]);
 
   const onSend = useCallback(
     (messages = []) => {
-      const userIds = selectedParticipants
-        .map(user => user.id)
-        .sort()
-        .join('_');
-      const chatId = `${currentUser.uid}_${userIds}`;
       const message = messages[0];
       firebase
         .firestore()
@@ -83,87 +75,130 @@ const ChatScreen = ({route, navigation}) => {
           },
         });
     },
-    [selectedParticipants],
+    [chatId, currentUser.uid, currentUser.displayName],
   );
 
   const toggleModal = () => {
     setModalVisible(!isModalVisible);
   };
 
-  const handleCardInput = formData => {
-    // Handle the card input data here
-    console.log('Card Data:', formData);
-    // toggleModal(); // Close modal after handling
-  };
-
-  const handleInputTextChange = text => {
-    setInputText(text);
+  const handleCardInput = async formData => {
+    // console.log(
+    //   'here is the formadata------->',
+    //   formData.values.expiry,
+    //   formData.values.cvc,
+    //   formData.values.number,
+    //   formData.values,
+    //   formData.values.expiry.split('/')[0],
+    //   formData.values.expiry.split('/')[1],
+    // );
+    // const {paymentMethod, error} = await createPaymentMethod({
+    //   type: 'pm_card_visa',
+    //   card: {
+    //     number: formData.values.number,
+    //     exp_month: formData.values.expiry.split('/')[0],
+    //     exp_year: formData.values.expiry.split('/')[1],
+    //     cvc: formData.values.cvc,
+    //   },
+    // });
+    // console.log('here is the payment method ------->', paymentMethod, error);
+    const amount = (totalBill / (selectedParticipants.length + 1)).toFixed(2);
+    const payload = {
+      amount: parseInt(amount * 100),
+      currency: 'PKR',
+      description: 'This is the payment for the order now',
+      payment_method: 'pm_card_visa',
+    };
+    toggleModal();
+    const response = await dispatch(createPaymentIntent(payload));
+    console.log(
+      'here is the stripe------->',
+      response.payload.clientSecret,
+      response.payload.paymentIntentId,
+    );
+    if (response.payload.clientSecret && response.payload.paymentIntentId) {
+      const payloadConfirmPaymentIntent = {
+        paymentIntentId: response.payload.paymentIntentId,
+        payment_method: 'pm_card_visa',
+      };
+      const responsepayment = await dispatch(
+        confirmPaymentIntent(payloadConfirmPaymentIntent),
+      );
+      console.log('here is the response', responsepayment);
+    }
   };
 
   const renderInputToolbar = props => (
     <View style={styles.inputContainer}>
-      <InputToolbar {...props} containerStyle={{flex: 1}} />
-      {inputText === '' && (
-        <TouchableOpacity style={styles.payButton} onPress={toggleModal}>
-          <Text style={styles.payButtonText}>Pay</Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.InputToolbar}>
+        <InputToolbar
+          {...props}
+          containerStyle={{
+            flex: 0.3,
+            bottom: -7,
+          }}
+        />
+      </View>
+      <TouchableOpacity style={styles.payButton} onPress={toggleModal}>
+        <Text style={styles.payButtonText}>Pay</Text>
+      </TouchableOpacity>
     </View>
-  );
-
-  const renderComposer = props => (
-    <Composer {...props} onTextChanged={handleInputTextChange} />
   );
 
   return (
-    <View style={styles.container}>
-      <Header
-        title={`Group Chat ${totalBill}`}
-        onPress={() => navigation.goBack()}
-      />
-      {loadingMessages ? (
-        <ActivityIndicator
-          style={styles.loadingIndicator}
-          size={50}
-          color={colors.primary}
+    <StripeProvider publishableKey="your-publishable-key">
+      <View style={styles.container}>
+        <Header
+          title={`Group Chat ${totalBill}`}
+          onPress={() => navigation.goBack()}
         />
-      ) : (
-        <GiftedChat
-          messages={messages}
-          onSend={messages => onSend(messages)}
-          user={{
-            _id: currentUser.uid,
-            name: currentUser.displayName,
-          }}
-          renderBubble={props => {
-            console.log('here are the props----->', props);
-            return (
-              <Bubble
-                {...props}
-                wrapperStyle={{
-                  left: {backgroundColor: '#f0f0f0'},
-                  right: {backgroundColor: '#0078fe'},
-                }}
-                textStyle={{
-                  left: {color: '#000'},
-                  right: {color: '#fff'},
-                }}
-              />
-            );
-          }}
-          renderInputToolbar={renderInputToolbar}
-          renderComposer={renderComposer}
-        />
-      )}
-      <Modal isVisible={isModalVisible} onBackdropPress={toggleModal}>
-        <View style={styles.modalContent}>
-          <CreditCardInput onChange={handleCardInput} />
-          <TouchableOpacity style={styles.submitButton} onPress={toggleModal}>
-            <Text style={styles.submitButtonText}>Submit</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-    </View>
+        {loadingMessages ? (
+          <ActivityIndicator
+            style={styles.loadingIndicator}
+            size={50}
+            color={colors.primary}
+          />
+        ) : (
+          <GiftedChat
+            messages={messages}
+            onSend={messages => onSend(messages)}
+            user={{
+              _id: currentUser.uid,
+              name: currentUser.displayName,
+            }}
+            renderBubble={props => (
+              <View style={styles.chatContainer}>
+                <Bubble
+                  {...props}
+                  wrapperStyle={{
+                    left: {backgroundColor: '#f0f0f0'},
+                    right: {backgroundColor: '#0078fe'},
+                  }}
+                  textStyle={{
+                    left: {color: '#000'},
+                    right: {color: '#fff'},
+                  }}
+                />
+              </View>
+            )}
+            renderInputToolbar={renderInputToolbar}
+          />
+        )}
+        <Modal isVisible={isModalVisible} onBackdropPress={toggleModal}>
+          <View style={styles.modalContent}>
+            <CreditCardInput
+            // onChange={handleCardInput}
+            />
+            <TouchableOpacity
+              style={styles.submitButton}
+              // onPress={toggleModal}
+              onPress={handleCardInput}>
+              <Text style={styles.submitButtonText}>Submit</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      </View>
+    </StripeProvider>
   );
 };
 
@@ -171,6 +206,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
+    paddingBottom: 32,
   },
   loadingIndicator: {
     flex: 1,
@@ -182,11 +218,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 10,
   },
+  chatContainer: {
+    flex: 1,
+    paddingBottom: 40,
+  },
+  InputToolbar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
   payButton: {
     backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 15,
     alignItems: 'center',
+    margin: 10,
   },
   payButtonText: {
     color: colors.white,

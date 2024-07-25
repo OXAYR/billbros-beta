@@ -6,7 +6,6 @@ import {
   View,
   ActivityIndicator,
   TextInput,
-  Button,
   Alert,
   TouchableOpacity,
 } from 'react-native';
@@ -17,18 +16,88 @@ import {firebase} from '@react-native-firebase/auth';
 import {styles} from './style';
 import {colors} from '../../../Constants';
 
+const MINIMUM_AMOUNT_IN_USD = 0.5;
+const INR_TO_USD_CONVERSION_RATE = 0.012; // Example conversion rate
+
+const createChatId = (user1Id, user2Id) => {
+  return [user1Id, user2Id].sort().join('_');
+};
+
+const fetchChatsForUser = async userId => {
+  try {
+    const chatsSnapshot = await firebase
+      .firestore()
+      .collection('chats')
+      .where('participantIds', 'array-contains', userId)
+      .get();
+
+    const chats = chatsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    console.log('Chats for user:', chats);
+    return chats;
+  } catch (error) {
+    console.error('Error fetching chats for user:', error);
+  }
+};
+
+const fetchChatById = async chatId => {
+  try {
+    const chatSnapshot = await firebase
+      .firestore()
+      .collection('chats')
+      .doc(chatId)
+      .get();
+
+    if (chatSnapshot.exists) {
+      const chatData = chatSnapshot.data();
+      console.log('Chat data:', chatData);
+      return chatData;
+    } else {
+      console.error('Chat not found');
+      return null;
+    }
+  } catch (error) {
+    console.error('Error fetching chat:', error);
+  }
+};
+
 const Payment = ({navigation}) => {
   const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState([]);
+  const [currentUser, setCurrentUser] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState({});
-  const [selectedParticipants, setSelectedParticipants] = useState([
-    {currentUser},
-  ]);
+  const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [highlightedUsers, setHighlightedUsers] = useState([]);
   const [totalBill, setTotalBill] = useState('');
   const [splitAmount, setSplitAmount] = useState(0);
+  const [groupChats, setGroupChats] = useState([]);
+  const [activeTab, setActiveTab] = useState('users');
+
+  useEffect(() => {
+    const fetchAllChatData = async () => {
+      try {
+        const chatsSnapshot = await firebase
+          .firestore()
+          .collection('chats')
+          .get();
+
+        const chatsData = chatsSnapshot.docs.map(doc => ({
+          chatId: doc.id,
+          participantIds: doc.data().participantIds,
+        }));
+
+        console.log('All chats data:', chatsData);
+        return chatsData;
+      } catch (error) {
+        console.error('Error fetching chat data:', error);
+      }
+    };
+    fetchAllChatData();
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -42,18 +111,19 @@ const Payment = ({navigation}) => {
             .firestore()
             .collection('users')
             .get();
-          console.log(
-            'here are the user snapchot data-------------->',
-            usersSnapshot.docs,
-          );
           const usersData = usersSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
           }));
-          console.log('herea re the users------>', usersData);
           const allUsers = usersData.filter(
             user => user.id !== currentUser.uid,
           );
+
+          console.log('Here are the users:', allUsers);
+
+          const userGroupChats = await fetchChatsForUser(currentUser.uid);
+          setGroupChats(userGroupChats);
+          console.log('Here are the group chats:', userGroupChats);
 
           const usersWithLastMessages = await Promise.all(
             allUsers.map(async user => {
@@ -79,7 +149,7 @@ const Payment = ({navigation}) => {
 
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching users or group chats:', error);
         setLoading(false);
       }
     };
@@ -99,8 +169,6 @@ const Payment = ({navigation}) => {
 
   const handleUserPress = userId => {
     const selectedUser = users.find(user => user.id === userId);
-    // navigation.navigate('Chat', {selectedUser});
-
     if (selectedParticipants.length < 4) {
       if (!selectedParticipants.find(user => user.id === userId)) {
         setSelectedParticipants([...selectedParticipants, selectedUser]);
@@ -130,25 +198,73 @@ const Payment = ({navigation}) => {
 
   const handleBillChange = value => {
     setTotalBill(value);
-    console.log(
-      'her ar ethe calue ----->',
-      value,
-      value / selectedParticipants.length,
-    );
     if (selectedParticipants.length > 0) {
-      setSplitAmount((value / selectedParticipants.length).toFixed(2));
+      setSplitAmount((value / (selectedParticipants.length + 1)).toFixed(2));
     } else {
       setSplitAmount(0);
     }
   };
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
+    const amountInINR = parseFloat(totalBill);
+    const amountInUSD = amountInINR * INR_TO_USD_CONVERSION_RATE;
+
+    if (amountInUSD < MINIMUM_AMOUNT_IN_USD) {
+      Alert.alert(
+        'Error',
+        `Amount must convert to at least $0.50. The current amount converts to approximately $${amountInUSD.toFixed(
+          2,
+        )}.`,
+      );
+      return;
+    }
+
     if (selectedParticipants.length > 0) {
       navigation.navigate('Chat', {
         selectedParticipants,
         totalBill,
         splitAmount,
       });
+
+      try {
+        const participantIds = selectedParticipants.map(user => user.id);
+        const chatId = [currentUser.uid, ...participantIds].sort().join('_');
+
+        const chatDoc = await firebase
+          .firestore()
+          .collection('chats')
+          .doc(chatId)
+          .get();
+
+        if (chatDoc.exists) {
+          console.log('Chat already exists, not creating a new one.');
+          return; // Exit the function if chat already exists
+        }
+
+        const shares = participantIds.map(id => ({
+          userId: id,
+          shareAmount: splitAmount || 0,
+        }));
+
+        const chatData = {
+          Name: `Group Chat users${participantIds.length}`,
+          participantIds: [currentUser.uid, ...participantIds],
+          totalBill: totalBill || 0,
+          shares,
+        };
+
+        console.log('Here are the chat data---->', chatData);
+
+        await firebase
+          .firestore()
+          .collection('chats')
+          .doc(chatId)
+          .set(chatData);
+
+        console.log('Chat document created or updated successfully');
+      } catch (error) {
+        console.error('Error creating or updating chat:', error);
+      }
     } else {
       Alert.alert('Please select at least one participant');
     }
@@ -157,7 +273,7 @@ const Payment = ({navigation}) => {
   const getLastMessage = async userId => {
     try {
       const currentUser = firebase.auth().currentUser;
-      const chatId = [currentUser.uid, userId].sort().join('_');
+      const chatId = createChatId(currentUser.uid, userId);
       const messageSnapshot = await firebase
         .firestore()
         .collection('chats')
@@ -193,6 +309,38 @@ const Payment = ({navigation}) => {
         .includes(searchQuery.toLowerCase()),
   );
 
+  const GroupChatList = ({groupChats}) => {
+    const handleGroupChatPress = chat => {
+      const {participantIds, totalBill, splitAmount, id} = chat;
+      navigation.navigate('Chat', {
+        selectedParticipants: participantIds.map(id => ({id})),
+        totalBill,
+        splitAmount,
+        id,
+      });
+    };
+
+    return (
+      <FlatList
+        data={groupChats}
+        renderItem={({item}) => (
+          <Pressable onPress={() => handleGroupChatPress(item)}>
+            <View style={styles.chatItem}>
+              <Text style={styles.chatName}>{item.Name}</Text>
+            </View>
+          </Pressable>
+        )}
+        keyExtractor={item => item.id}
+      />
+    );
+  };
+
+  const renderGroupChats = () => (
+    <View style={styles.groupChatsContainer}>
+      <GroupChatList groupChats={groupChats} />
+    </View>
+  );
+
   return (
     <View style={styles.mainContainer}>
       <Header title="Payment" onPress={() => navigation.goBack()} />
@@ -207,98 +355,117 @@ const Payment = ({navigation}) => {
         onChangeText={handleSearch}
       />
 
-      <Text style={styles.friendsText}>Friends</Text>
-      <Text style={styles.accountText}>Selected User Accounts</Text>
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'users' && styles.activeTab]}
+          onPress={() => setActiveTab('users')}>
+          <Text style={styles.tabText}>Users</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'groupChats' && styles.activeTab]}
+          onPress={() => setActiveTab('groupChats')}>
+          <Text style={styles.tabText}>Group Chats</Text>
+        </TouchableOpacity>
+      </View>
 
-      <TextInput
-        style={styles.billInput}
-        placeholder="Enter total bill"
-        keyboardType="numeric"
-        value={totalBill}
-        onChangeText={handleBillChange}
-      />
+      {activeTab === 'users' ? (
+        <>
+          <Text style={styles.friendsText}>Friends</Text>
+          <Text style={styles.accountText}>Selected User Accounts</Text>
 
-      {selectedParticipants.length > 0 && (
-        <View>
-          <Text style={styles.splitText}>Split Amount: ${splitAmount}</Text>
-          <FlatList
-            data={selectedParticipants}
-            renderItem={({item}) => (
-              <View style={styles.participantView}>
-                <Text style={styles.participantName}>
-                  {item.name || item.username}
-                </Text>
-                <Text style={styles.participantAmount}>${splitAmount}</Text>
-              </View>
-            )}
-            keyExtractor={item => item.id}
+          <TextInput
+            style={styles.billInput}
+            placeholder="Enter total bill"
+            keyboardType="numeric"
+            value={totalBill}
+            onChangeText={handleBillChange}
           />
-        </View>
-      )}
 
-      {loading ? (
-        <ActivityIndicator
-          style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}
-          size={50}
-          color={colors.primary}
-        />
-      ) : (
-        <FlatList
-          data={filteredUsers}
-          renderItem={({item}) => (
-            <Pressable
-              onPress={() => handleUserPress(item.id)}
-              onLongPress={() => handleUserLongPress(item.id)}
-              style={[
-                styles.chatView,
-                highlightedUsers.includes(item.id) && styles.highlighted,
-              ]}>
-              <Image
-                resizeMode="center"
-                style={styles.chatImage}
-                source={
-                  item.icon ||
-                  require('../../../../assets/images/person_icon.png')
-                }
+          {selectedParticipants.length > 0 && (
+            <View>
+              <Text style={styles.splitText}>Split Amount: ${splitAmount}</Text>
+              <FlatList
+                data={selectedParticipants}
+                renderItem={({item}) => (
+                  <View style={styles.participantView}>
+                    <Text style={styles.participantName}>
+                      {item.name || item.username}
+                    </Text>
+                    <Text style={styles.participantAmount}>${splitAmount}</Text>
+                  </View>
+                )}
+                keyExtractor={item => item.id}
               />
-              <View style={styles.chatNameContainer}>
-                <Text style={styles.chatName} numberOfLines={1}>
-                  {item.name || item.username}
-                </Text>
-                <Text
-                  style={[
-                    styles.chatMessage,
-                    {
-                      color: item.lastMessage.fromCurrentUser
-                        ? colors.primary
-                        : colors.gray,
-                    },
-                  ]}
-                  numberOfLines={1}>
-                  {item.lastMessage.text}
-                </Text>
-              </View>
-              {item.price && (
-                <Text
-                  style={[styles.lastSeen, {color: item.color}]}
-                  numberOfLines={1}>
-                  {item.price}
-                </Text>
-              )}
-              {/* {unreadMessages[item.id] > 0 && ( */}
-              {/*  <Text style={styles.unreadCount}>{unreadMessages[item.id]}</Text> */}
-              <Text style={styles.unreadCount}>5</Text>
-
-              {/* )} */}
-            </Pressable>
+            </View>
           )}
-          keyExtractor={item => item.id}
-        />
-      )}
 
-      <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-        <Text style={styles.createButtonText}>Create Group Chat</Text>
-      </TouchableOpacity>
+          {loading ? (
+            <ActivityIndicator
+              style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}
+              size={50}
+              color={colors.primary}
+            />
+          ) : (
+            <FlatList
+              data={filteredUsers}
+              renderItem={({item}) => (
+                <Pressable
+                  onPress={() => handleUserPress(item.id)}
+                  onLongPress={() => handleUserLongPress(item.id)}
+                  style={[
+                    styles.chatView,
+                    highlightedUsers.includes(item.id) && styles.highlighted,
+                  ]}>
+                  <Image
+                    resizeMode="center"
+                    style={styles.chatImage}
+                    source={
+                      item.icon ||
+                      require('../../../../assets/images/person_icon.png')
+                    }
+                  />
+                  <View style={styles.chatNameContainer}>
+                    <Text style={styles.chatName} numberOfLines={1}>
+                      {item.name || item.username}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.chatMessage,
+                        {
+                          color: item.lastMessage.fromCurrentUser
+                            ? colors.primary
+                            : colors.gray,
+                        },
+                      ]}
+                      numberOfLines={1}>
+                      {item.lastMessage.text}
+                    </Text>
+                  </View>
+                  {item.price && (
+                    <Text
+                      style={[styles.lastSeen, {color: item.color}]}
+                      numberOfLines={1}>
+                      {item.price}
+                    </Text>
+                  )}
+                  <Text style={styles.unreadCount}>
+                    {unreadMessages[item.id]}
+                  </Text>
+                </Pressable>
+              )}
+              keyExtractor={item => item.id}
+            />
+          )}
+
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={handleCreateGroup}>
+            <Text style={styles.createButtonText}>Create Group Chat</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        renderGroupChats()
+      )}
     </View>
   );
 };

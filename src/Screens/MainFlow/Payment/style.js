@@ -173,4 +173,14 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+
+  chatItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+  },
+  chatName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
