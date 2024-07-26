@@ -249,6 +249,7 @@ const Payment = ({navigation}) => {
         const chatData = {
           Name: `Group Chat users${participantIds.length}`,
           participantIds: [currentUser.uid, ...participantIds],
+          adminId: currentUser.uid,
           totalBill: totalBill || 0,
           shares,
         };
