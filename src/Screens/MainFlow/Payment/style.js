@@ -4,36 +4,17 @@ import {
   heightPercentageToDP as hp,
   widthPercentageToDP as wp,
 } from 'react-native-responsive-screen';
-
 export const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#fff',
+    padding: 10,
   },
-  texts: {
-    fontSize: fontSize.four,
-    color: colors.black,
-    marginTop: hp(2),
-    marginLeft: wp(3),
-    marginRight: wp(3),
-  },
-
   inputViewStyle: {
-    flexDirection: 'row',
-    width: wp(90),
-    borderRadius: radius.radius1,
-    alignItems: 'center',
-    alignSelf: 'center',
-    paddingVertical: hp(0.1),
-    justifyContent: 'space-evenly',
-    marginBottom: hp(2),
-    backgroundColor: colors.lightWhite,
-    paddingHorizontal: wp(3),
-  },
-  searchIcon: {
-    width: wp(6),
-    height: hp(3),
-    alignSelf: 'center',
+    marginVertical: 10,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 5,
   },
   searchInputText: {
     textAlign: 'left',
@@ -43,143 +24,169 @@ export const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.black,
   },
-
-  placeholderTextColor: colors.lightGray,
-
-  friendsText: {
-    fontFamily: fontFamily.semiBold,
-    color: colors.black,
-    fontSize: fontSize.fontSize4,
-    paddingHorizontal: wp(5),
-    marginTop: hp(3),
+  placeholderTextColor: colors.placeholder,
+  searchIcon: {
+    width: 20,
+    height: 20,
+    tintColor: colors.primary,
   },
-
-  accountText: {
-    color: colors.lightGray,
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.fontSize3,
-    paddingHorizontal: wp(5),
-    marginBottom: hp(3),
-  },
-
-  //
-  chatView: {
+  tabContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    height: hp(7),
-    width: wp(95),
-    alignSelf: 'center',
-    borderBottomColor: colors.lightGray,
-    borderBottomWidth: wp(0.2),
-    marginBottom: hp(2.5),
+    marginVertical: 10,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
   },
-
-  chatImage: {
-    height: hp(7),
-    width: hp(7),
-    borderRadius: radius.radius7,
-    alignSelf: 'center',
-  },
-
-  chatNameContainer: {
-    // backgroundColor: 'red',
+  tab: {
     flex: 1,
-    height: hp(7),
-    width: wp(51),
-    marginLeft: wp(3),
-  },
-
-  chatName: {
-    color: colors.black,
-    fontSize: fontSize.fontSize4,
-    fontFamily: fontFamily.bold,
-    textAlign: 'left',
-  },
-
-  chatMessage: {
-    color: colors.gray,
-    fontFamily: fontFamily.medium,
-    marginTop: hp(0.7),
-    textAlign: 'left',
-    width: wp(60),
-  },
-
-  lastSeen: {
-    color: colors.darkGreen,
-    fontSize: fontSize.fontSize4point5,
-    fontFamily: fontFamily.bold,
-  },
-  unreadCount: {
-    borderRadius: radius.radius7,
-    backgroundColor: colors.primary,
-    // padding:hp(2),
-    height: hp(3),
-    width: hp(3),
-    textAlign: 'center',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-    color: colors.white,
-    fontWeight: '900',
-    marginRight: wp(3),
-  },
-
-  ///ozziee
-
-  billInput: {
-    borderWidth: 1,
-    borderColor: colors.gray,
-    borderRadius: 8,
     padding: 10,
-    margin: 10,
-    fontSize: 16,
-    color: colors.darkText,
+    alignItems: 'center',
+    borderBottomWidth: 3,
   },
-  splitText: {
+  activeTab: {
+    borderBottomColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  friendsText: {
     fontSize: 18,
     fontWeight: 'bold',
-    textAlign: 'center',
     marginVertical: 10,
-    color: colors.primary,
+  },
+  accountText: {
+    fontSize: 16,
+    marginVertical: 5,
+    color: colors.textSecondary,
+  },
+  billInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontSize: 16,
+    marginVertical: 10,
+  },
+  splitText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginVertical: 10,
   },
   participantView: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 10,
-    marginHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    paddingVertical: 5,
   },
   participantName: {
     fontSize: 16,
-    color: colors.darkText,
+    color: colors.text,
   },
   participantAmount: {
     fontSize: 16,
     color: colors.primary,
   },
+  chatView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   highlighted: {
-    backgroundColor: colors.lightPrimary,
+    backgroundColor: colors.highlight,
+  },
+  chatImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  chatNameContainer: {
+    flex: 1,
+  },
+  chatName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  chatMessage: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  lastSeen: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  unreadCount: {
+    fontSize: 14,
+    color: colors.primary,
+    marginLeft: 10,
   },
   createButton: {
-    margin: 20,
-    padding: 15,
     backgroundColor: colors.primary,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 5,
     alignItems: 'center',
+    marginTop: 20,
   },
   createButtonText: {
-    color: colors.white,
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-
+  groupChatsContainer: {
+    flex: 1,
+    marginTop: 10,
+  },
   chatItem: {
-    padding: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
+    borderBottomColor: colors.border,
   },
   chatName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  modalInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontSize: 16,
+    marginBottom: 15,
+  },
+  modalButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  modalButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },

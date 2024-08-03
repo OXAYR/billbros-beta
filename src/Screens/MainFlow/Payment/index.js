@@ -1,213 +1,116 @@
 import React, {useState, useEffect} from 'react';
 import {
-  FlatList,
-  Image,
-  Pressable,
   View,
-  ActivityIndicator,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
   TextInput,
   Alert,
-  TouchableOpacity,
 } from 'react-native';
-import Text from '../../../Components/Text';
-import InputField from '../../../Components/InputField';
-import Header from '../../../Components/Header';
 import {firebase} from '@react-native-firebase/auth';
-import {styles} from './style';
+import Modal from 'react-native-modal';
+import Header from '../../../Components/Header';
 import {colors} from '../../../Constants';
 
 const MINIMUM_AMOUNT_IN_USD = 0.5;
-const INR_TO_USD_CONVERSION_RATE = 0.012; // Example conversion rate
-
-const createChatId = (user1Id, user2Id) => {
-  return [user1Id, user2Id].sort().join('_');
-};
-
-const fetchChatsForUser = async userId => {
-  try {
-    const chatsSnapshot = await firebase
-      .firestore()
-      .collection('chats')
-      .where('participantIds', 'array-contains', userId)
-      .get();
-
-    const chats = chatsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    console.log('Chats for user:', chats);
-    return chats;
-  } catch (error) {
-    console.error('Error fetching chats for user:', error);
-  }
-};
-
-const fetchChatById = async chatId => {
-  try {
-    const chatSnapshot = await firebase
-      .firestore()
-      .collection('chats')
-      .doc(chatId)
-      .get();
-
-    if (chatSnapshot.exists) {
-      const chatData = chatSnapshot.data();
-      console.log('Chat data:', chatData);
-      return chatData;
-    } else {
-      console.error('Chat not found');
-      return null;
-    }
-  } catch (error) {
-    console.error('Error fetching chat:', error);
-  }
-};
+const PKR_TO_USD_CONVERSION_RATE = 0.0035; // Example conversion rate (1 PKR = 0.0035 USD)
 
 const Payment = ({navigation}) => {
   const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [unreadMessages, setUnreadMessages] = useState({});
+  const [groups, setGroups] = useState([]);
   const [selectedParticipants, setSelectedParticipants] = useState([]);
-  const [highlightedUsers, setHighlightedUsers] = useState([]);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [groupName, setGroupName] = useState('');
   const [totalBill, setTotalBill] = useState('');
-  const [splitAmount, setSplitAmount] = useState(0);
-  const [groupChats, setGroupChats] = useState([]);
   const [activeTab, setActiveTab] = useState('users');
 
   useEffect(() => {
-    const fetchAllChatData = async () => {
-      try {
-        const chatsSnapshot = await firebase
-          .firestore()
-          .collection('chats')
-          .get();
-
-        const chatsData = chatsSnapshot.docs.map(doc => ({
-          chatId: doc.id,
-          participantIds: doc.data().participantIds,
-        }));
-
-        console.log('All chats data:', chatsData);
-        return chatsData;
-      } catch (error) {
-        console.error('Error fetching chat data:', error);
-      }
-    };
-    fetchAllChatData();
+    fetchUsers();
+    fetchGroups();
   }, []);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-
-        const currentUser = firebase.auth().currentUser;
-        setCurrentUser(currentUser);
-        if (currentUser) {
-          const usersSnapshot = await firebase
-            .firestore()
-            .collection('users')
-            .get();
-          const usersData = usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          const allUsers = usersData.filter(
-            user => user.id !== currentUser.uid,
-          );
-
-          console.log('Here are the users:', allUsers);
-
-          const userGroupChats = await fetchChatsForUser(currentUser.uid);
-          setGroupChats(userGroupChats);
-          console.log('Here are the group chats:', userGroupChats);
-
-          const usersWithLastMessages = await Promise.all(
-            allUsers.map(async user => {
-              const lastMessage = await getLastMessage(user.id);
-              return {...user, lastMessage};
-            }),
-          );
-
-          const initialUnreadMessages = {};
-          usersWithLastMessages.forEach(user => {
-            if (!user.lastMessage.fromCurrentUser && user.lastMessage.unread) {
-              initialUnreadMessages[user.id] = 1;
-            } else {
-              initialUnreadMessages[user.id] = 0;
-            }
-          });
-
-          setUnreadMessages(initialUnreadMessages);
-          setUsers(usersWithLastMessages);
-        } else {
-          console.error('No current user logged in');
-        }
-
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching users or group chats:', error);
-        setLoading(false);
+  const fetchUsers = async () => {
+    try {
+      const currentUser = firebase.auth().currentUser;
+      if (currentUser) {
+        const usersSnapshot = await firebase
+          .firestore()
+          .collection('users')
+          .get();
+        const usersData = usersSnapshot.docs
+          .map(doc => ({id: doc.id, ...doc.data()}))
+          .filter(user => user.id !== currentUser.uid);
+        console.log('Fetched users:', usersData);
+        setUsers(usersData);
+      } else {
+        console.error('No current user logged in');
       }
-    };
-
-    fetchUsers();
-
-    const unsubscribeFocus = navigation.addListener('focus', () => {
-      fetchUsers();
-    });
-
-    return unsubscribeFocus;
-  }, [navigation]);
-
-  const handleSearch = text => {
-    setSearchQuery(text);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
   };
 
-  const handleUserPress = userId => {
-    const selectedUser = users.find(user => user.id === userId);
-    if (selectedParticipants.length < 4) {
-      if (!selectedParticipants.find(user => user.id === userId)) {
+  const fetchGroups = async () => {
+    try {
+      const currentUser = firebase.auth().currentUser;
+      if (currentUser) {
+        const groupsSnapshot = await firebase
+          .firestore()
+          .collection('chats')
+          .where('participantIds', 'array-contains', currentUser.uid)
+          .get();
+        const groupsData = groupsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        console.log('Fetched groups:', groupsData);
+        setGroups(groupsData);
+      } else {
+        console.error('No current user logged in');
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    }
+  };
+
+  const handleUserLongPress = userId => {
+    console.log('User long pressed:', userId);
+    if (selectedParticipants.length < 3) {
+      const selectedUser = users.find(user => user.id === userId);
+      if (!selectedParticipants.some(user => user.id === userId)) {
         setSelectedParticipants([...selectedParticipants, selectedUser]);
       } else {
         setSelectedParticipants(
           selectedParticipants.filter(user => user.id !== userId),
         );
       }
+    } else if (selectedParticipants.some(user => user.id === userId)) {
+      setSelectedParticipants(
+        selectedParticipants.filter(user => user.id !== userId),
+      );
     } else {
-      if (selectedParticipants.find(user => user.id === userId)) {
-        setSelectedParticipants(
-          selectedParticipants.filter(user => user.id !== userId),
-        );
-      } else {
-        Alert.alert('Maximum 4 participants allowed');
-      }
+      Alert.alert('Maximum 3 participants allowed (excluding yourself)');
+    }
+    console.log('Selected participants:', selectedParticipants);
+  };
+
+  const toggleModal = () => {
+    if (selectedParticipants.length === 0) {
+      Alert.alert('Please select at least one participant');
+    } else {
+      setModalVisible(!isModalVisible);
     }
   };
 
-  const handleUserLongPress = userId => {
-    if (highlightedUsers.includes(userId)) {
-      setHighlightedUsers(highlightedUsers.filter(id => id !== userId));
-    } else {
-      setHighlightedUsers([...highlightedUsers, userId]);
+  const createGroup = async () => {
+    if (groupName.trim() === '' || totalBill.trim() === '') {
+      Alert.alert('Error', 'Please enter both group name and total bill');
+      return;
     }
-  };
 
-  const handleBillChange = value => {
-    setTotalBill(value);
-    if (selectedParticipants.length > 0) {
-      setSplitAmount((value / (selectedParticipants.length + 1)).toFixed(2));
-    } else {
-      setSplitAmount(0);
-    }
-  };
-
-  const handleCreateGroup = async () => {
-    const amountInINR = parseFloat(totalBill);
-    const amountInUSD = amountInINR * INR_TO_USD_CONVERSION_RATE;
+    const amountInPKR = parseFloat(totalBill);
+    const amountInUSD = amountInPKR * PKR_TO_USD_CONVERSION_RATE;
 
     if (amountInUSD < MINIMUM_AMOUNT_IN_USD) {
       Alert.alert(
@@ -219,142 +122,105 @@ const Payment = ({navigation}) => {
       return;
     }
 
-    if (selectedParticipants.length > 0) {
-      navigation.navigate('Chat', {
-        selectedParticipants,
-        totalBill,
-        splitAmount,
-      });
-
-      try {
-        const participantIds = selectedParticipants.map(user => user.id);
-        const chatId = [currentUser.uid, ...participantIds].sort().join('_');
-
-        const chatDoc = await firebase
-          .firestore()
-          .collection('chats')
-          .doc(chatId)
-          .get();
-
-        if (chatDoc.exists) {
-          console.log('Chat already exists, not creating a new one.');
-          return; // Exit the function if chat already exists
-        }
-
-        const shares = participantIds.map(id => ({
-          userId: id,
-          shareAmount: splitAmount || 0,
-        }));
-
-        const chatData = {
-          Name: `Group Chat users${participantIds.length}`,
-          participantIds: [currentUser.uid, ...participantIds],
-          adminId: currentUser.uid,
-          totalBill: totalBill || 0,
-          shares,
-        };
-
-        console.log('Here are the chat data---->', chatData);
-
-        await firebase
-          .firestore()
-          .collection('chats')
-          .doc(chatId)
-          .set(chatData);
-
-        console.log('Chat document created or updated successfully');
-      } catch (error) {
-        console.error('Error creating or updating chat:', error);
-      }
-    } else {
-      Alert.alert('Please select at least one participant');
-    }
-  };
-
-  const getLastMessage = async userId => {
     try {
       const currentUser = firebase.auth().currentUser;
-      const chatId = createChatId(currentUser.uid, userId);
-      const messageSnapshot = await firebase
+      const participantIds = [
+        ...selectedParticipants.map(user => user.id),
+        currentUser.uid,
+      ];
+      const chatId = participantIds.sort().join('_');
+
+      const chatDoc = await firebase
         .firestore()
         .collection('chats')
         .doc(chatId)
-        .collection('messages')
-        .orderBy('createdAt', 'desc')
-        .limit(1)
         .get();
 
-      if (!messageSnapshot.empty) {
-        const lastMessage = messageSnapshot.docs[0].data();
-        const isFromCurrentUser = lastMessage.user.id === currentUser.uid;
-        const unread = !isFromCurrentUser && !lastMessage.read;
-        return {
-          text: lastMessage.text,
-          fromCurrentUser: isFromCurrentUser,
-          unread,
-        };
-      } else {
-        return {text: '', fromCurrentUser: true, unread: false};
+      if (chatDoc.exists) {
+        Alert.alert('Error', 'A group with these participants already exists');
+        return;
       }
+
+      const chatData = {
+        Name: groupName,
+        participantIds,
+        adminId: currentUser.uid,
+        totalBill: amountInPKR,
+        totalBillUSD: amountInUSD,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await firebase.firestore().collection('chats').doc(chatId).set(chatData);
+
+      Alert.alert('Success', 'Group created successfully');
+      toggleModal();
+      setGroupName('');
+      setTotalBill('');
+      setSelectedParticipants([]);
+      fetchGroups(); // Refresh the groups list
     } catch (error) {
-      console.error('Error fetching last message:', error);
-      return {text: '', fromCurrentUser: true, unread: false};
+      console.error('Error creating group:', error);
+      Alert.alert('Error', 'Failed to create group. Please try again.');
     }
   };
 
-  const filteredUsers = users.filter(
-    user =>
-      (user.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.phoneNumber ?? '')
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()),
+  const renderUsers = () => (
+    <ScrollView style={styles.tabContent}>
+      <Text style={styles.listHeader}>Total users: {users.length}</Text>
+      {users.map(item => (
+        <TouchableOpacity
+          key={item.id}
+          style={[
+            styles.userItem,
+            selectedParticipants.some(user => user.id === item.id) &&
+              styles.selectedUser,
+          ]}
+          onLongPress={() => handleUserLongPress(item.id)}>
+          <Text style={[styles.userName, {color: 'black'}]}>
+            {item.username || 'No Name'}
+          </Text>
+        </TouchableOpacity>
+      ))}
+      {users.length === 0 && (
+        <Text style={styles.emptyListText}>No users found</Text>
+      )}
+      <TouchableOpacity style={styles.button} onPress={toggleModal}>
+        <Text style={styles.buttonText}>
+          Create Group ({selectedParticipants.length})
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 
-  const GroupChatList = ({groupChats}) => {
-    const handleGroupChatPress = chat => {
-      const {participantIds, totalBill, splitAmount, id} = chat;
-      navigation.navigate('Chat', {
-        selectedParticipants: participantIds.map(id => ({id})),
-        totalBill,
-        splitAmount,
-        id,
-      });
-    };
-
-    return (
-      <FlatList
-        data={groupChats}
-        renderItem={({item}) => (
-          <Pressable onPress={() => handleGroupChatPress(item)}>
-            <View style={styles.chatItem}>
-              <Text style={styles.chatName}>{item.Name}</Text>
-            </View>
-          </Pressable>
-        )}
-        keyExtractor={item => item.id}
-      />
-    );
-  };
-
-  const renderGroupChats = () => (
-    <View style={styles.groupChatsContainer}>
-      <GroupChatList groupChats={groupChats} />
-    </View>
+  const renderGroups = () => (
+    <ScrollView style={styles.tabContent}>
+      <Text style={styles.listHeader}>Total groups: {groups.length}</Text>
+      {groups.map(item => (
+        <TouchableOpacity
+          key={item.id}
+          style={styles.groupItem}
+          onPress={() =>
+            navigation.navigate('Chat', {
+              groupId: item.id,
+              selectedParticipants: item.participantIds,
+              totalBill: item.totalBill,
+            })
+          }>
+          <Text style={[styles.groupName, {color: 'black'}]}>{item.Name}</Text>
+          <Text style={styles.groupMembers}>
+            {item.participantIds.length} members
+          </Text>
+        </TouchableOpacity>
+      ))}
+      {groups.length === 0 && (
+        <Text style={styles.emptyListText}>No groups found</Text>
+      )}
+    </ScrollView>
   );
 
   return (
-    <View style={styles.mainContainer}>
-      <Header title="Payment" onPress={() => navigation.goBack()} />
-      <InputField
-        leftIcon={require('../../../../assets/images/search_icon.png')}
-        numberOfLines={1}
-        placeholder="Search name or number"
-        inputViewStyle={styles.inputViewStyle}
-        style={styles.searchInputText}
-        placeholderTextColor={styles.placeholderTextColor}
-        leftIconStyle={styles.searchIcon}
-        onChangeText={handleSearch}
-      />
+    <View style={styles.container}>
+      <Header onPress={() => navigation.goBack()} title={'Payment'} />
 
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -363,112 +229,182 @@ const Payment = ({navigation}) => {
           <Text style={styles.tabText}>Users</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'groupChats' && styles.activeTab]}
-          onPress={() => setActiveTab('groupChats')}>
-          <Text style={styles.tabText}>Group Chats</Text>
+          style={[styles.tab, activeTab === 'groups' && styles.activeTab]}
+          onPress={() => setActiveTab('groups')}>
+          <Text style={styles.tabText}>Groups</Text>
         </TouchableOpacity>
       </View>
-
-      {activeTab === 'users' ? (
-        <>
-          <Text style={styles.friendsText}>Friends</Text>
-          <Text style={styles.accountText}>Selected User Accounts</Text>
-
+      {activeTab === 'users' ? renderUsers() : renderGroups()}
+      <Modal isVisible={isModalVisible}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Create Group</Text>
           <TextInput
-            style={styles.billInput}
-            placeholder="Enter total bill"
+            style={styles.input}
+            placeholder="Enter group name"
+            value={groupName}
+            onChangeText={setGroupName}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Enter total bill (in PKR)"
             keyboardType="numeric"
             value={totalBill}
-            onChangeText={handleBillChange}
+            onChangeText={setTotalBill}
           />
-
-          {selectedParticipants.length > 0 && (
-            <View>
-              <Text style={styles.splitText}>Split Amount: ${splitAmount}</Text>
-              <FlatList
-                data={selectedParticipants}
-                renderItem={({item}) => (
-                  <View style={styles.participantView}>
-                    <Text style={styles.participantName}>
-                      {item.name || item.username}
-                    </Text>
-                    <Text style={styles.participantAmount}>${splitAmount}</Text>
-                  </View>
-                )}
-                keyExtractor={item => item.id}
-              />
-            </View>
-          )}
-
-          {loading ? (
-            <ActivityIndicator
-              style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}
-              size={50}
-              color={colors.primary}
-            />
-          ) : (
-            <FlatList
-              data={filteredUsers}
-              renderItem={({item}) => (
-                <Pressable
-                  onPress={() => handleUserPress(item.id)}
-                  onLongPress={() => handleUserLongPress(item.id)}
-                  style={[
-                    styles.chatView,
-                    highlightedUsers.includes(item.id) && styles.highlighted,
-                  ]}>
-                  <Image
-                    resizeMode="center"
-                    style={styles.chatImage}
-                    source={
-                      item.icon ||
-                      require('../../../../assets/images/person_icon.png')
-                    }
-                  />
-                  <View style={styles.chatNameContainer}>
-                    <Text style={styles.chatName} numberOfLines={1}>
-                      {item.name || item.username}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.chatMessage,
-                        {
-                          color: item.lastMessage.fromCurrentUser
-                            ? colors.primary
-                            : colors.gray,
-                        },
-                      ]}
-                      numberOfLines={1}>
-                      {item.lastMessage.text}
-                    </Text>
-                  </View>
-                  {item.price && (
-                    <Text
-                      style={[styles.lastSeen, {color: item.color}]}
-                      numberOfLines={1}>
-                      {item.price}
-                    </Text>
-                  )}
-                  <Text style={styles.unreadCount}>
-                    {unreadMessages[item.id]}
-                  </Text>
-                </Pressable>
-              )}
-              keyExtractor={item => item.id}
-            />
-          )}
-
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={handleCreateGroup}>
-            <Text style={styles.createButtonText}>Create Group Chat</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        renderGroupChats()
-      )}
+          <Text style={styles.conversionText}>
+            Minimum amount: PKR{' '}
+            {(MINIMUM_AMOUNT_IN_USD / PKR_TO_USD_CONVERSION_RATE).toFixed(2)} ($
+            {MINIMUM_AMOUNT_IN_USD.toFixed(2)})
+          </Text>
+          <View style={styles.modalButtons}>
+            <TouchableOpacity style={styles.modalButton} onPress={toggleModal}>
+              <Text style={styles.modalButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonPrimary]}
+              onPress={createGroup}>
+              <Text
+                style={[styles.modalButtonText, styles.modalButtonTextPrimary]}>
+                Create
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+
+    backgroundColor: '#F5F5F5',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  tab: {
+    flex: 1,
+    padding: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: '#ccc',
+  },
+  activeTab: {
+    borderBottomColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  tabContent: {
+    flex: 1,
+    padding: 20,
+  },
+  listHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  userItem: {
+    padding: 15,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  selectedUser: {
+    backgroundColor: '#E3F2FD',
+  },
+  userName: {
+    fontSize: 16,
+    color: 'black',
+  },
+  groupItem: {
+    padding: 15,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  groupName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'black',
+  },
+  groupMembers: {
+    fontSize: 14,
+    color: '#666',
+  },
+  button: {
+    backgroundColor: colors.primary,
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  emptyListText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: '#666',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 4,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  input: {
+    height: 40,
+    borderColor: 'gray',
+    borderWidth: 1,
+    marginBottom: 15,
+    width: '100%',
+    paddingHorizontal: 10,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    padding: 10,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+  },
+  modalButtonText: {
+    color: '#4CAF50',
+    fontSize: 16,
+  },
+  modalButtonTextPrimary: {
+    color: 'white',
+  },
+  conversionText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+  },
+});
 
 export default Payment;

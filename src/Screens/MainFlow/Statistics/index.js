@@ -1,16 +1,15 @@
-import { Image, ScrollView, View } from 'react-native'
-import React from 'react'
-import Button from '../../../Components/Button'
-import Text from '../../../Components/Text'
-import { styles } from './style'
-import Header from '../../../Components/Header'
-import PieChart from 'react-native-pie-chart'
-import { widthPercentageToDP } from 'react-native-responsive-screen'
-import { colors } from '../../../Constants'
-import FlatlistComponent from '../../../Components/FlatList'
+import {Image, ScrollView, View} from 'react-native';
+import React from 'react';
+import Button from '../../../Components/Button';
+import Text from '../../../Components/Text';
+import {styles} from './style';
+import Header from '../../../Components/Header';
+import PieChart from 'react-native-pie-chart';
+import {widthPercentageToDP} from 'react-native-responsive-screen';
+import {colors} from '../../../Constants';
+import FlatlistComponent from '../../../Components/FlatList';
 
-
-const Statistics = ({ navigation }) => {
+const Statistics = ({navigation}) => {
   const transactions = [
     {
       name: 'Salary',
@@ -40,41 +39,50 @@ const Statistics = ({ navigation }) => {
       price: 'Rs. 32,700',
       color: 'green',
     },
-  ]
+  ];
 
   const coloredDots = [
     {
       name: 'Salary',
-      icon: require('../../../../assets/images/midGreenDot.png')
+      icon: require('../../../../assets/images/midGreenDot.png'),
     },
     {
       name: 'Food & Drink',
-      icon: require('../../../../assets/images/blueDot.png')
+      icon: require('../../../../assets/images/blueDot.png'),
     },
     {
       name: 'E-Wallet',
-      icon: require('../../../../assets/images/greenDot.png')
+      icon: require('../../../../assets/images/greenDot.png'),
     },
     {
       name: 'Internet',
-      icon: require('../../../../assets/images/darkGreenDot.png')
+      icon: require('../../../../assets/images/darkGreenDot.png'),
     },
     {
       name: 'Shopping',
-      icon: require('../../../../assets/images/redDot.png')
-    }
-  ]
-  const widthAndHeight = widthPercentageToDP(50)
-  const series = [100, 100, 100, 100, 100]
-  const sliceColor = [colors.chartBlue, colors.chartRed, colors.chartMidGreen, colors.chartDarkGreen, colors.chartGreen]
+      icon: require('../../../../assets/images/redDot.png'),
+    },
+  ];
+  const widthAndHeight = widthPercentageToDP(50);
+  const series = [100, 100, 100, 100, 100];
+  const sliceColor = [
+    colors.chartBlue,
+    colors.chartRed,
+    colors.chartMidGreen,
+    colors.chartDarkGreen,
+    colors.chartGreen,
+  ];
   return (
-    <ScrollView showsVerticalScrollIndicator={false} style={styles.mainContainer}>
-      <Header
-        onPress={() => navigation.goBack()}
-        title='Statistics'
-      />
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      style={styles.mainContainer}>
+      <Header onPress={() => navigation.goBack()} title="Statistics" />
       <View style={styles.dateView}>
-        <Image style={styles.calendarIcon} resizeMode='center' source={require('../../../../assets/images/calendar_icon.png')} />
+        <Image
+          style={styles.calendarIcon}
+          resizeMode="center"
+          source={require('../../../../assets/images/calendar_icon.png')}
+        />
         <Text style={styles.dateText}>November 19,2024</Text>
       </View>
 
@@ -88,20 +96,27 @@ const Statistics = ({ navigation }) => {
             coverFill={'#FFF'}
           />
         </View>
-        <View style={styles.detailView}  >
-          {coloredDots.map((item) => (
-            <View style={{ flexDirection: 'row' }}>
-              <Image style={styles.dotIcon} resizeMode='center' source={item.icon} />
+        <View style={styles.detailView}>
+          {coloredDots.map(item => (
+            <View style={{flexDirection: 'row'}}>
+              <Image
+                style={styles.dotIcon}
+                resizeMode="center"
+                source={item.icon}
+              />
               <Text style={styles.detailName}>{item.name}</Text>
             </View>
           ))}
         </View>
-
       </View>
 
       <View style={styles.incomeView}>
         <View style={styles.incomeExpenseView}>
-          <Image style={styles.moneyIcon} resizeMode='center' source={require('../../../../assets/images/money_icon.png')} />
+          <Image
+            style={styles.moneyIcon}
+            resizeMode="center"
+            source={require('../../../../assets/images/money_icon.png')}
+          />
           <View style={styles.innerIncomeExpenseView}>
             <Text style={styles.price}>Rs. 50,789</Text>
             <Text style={styles.incomeText}>Income</Text>
@@ -109,7 +124,11 @@ const Statistics = ({ navigation }) => {
         </View>
 
         <View style={styles.incomeExpenseView2}>
-          <Image style={styles.moneyIcon} resizeMode='center' source={require('../../../../assets/images/calculator_icon.png')} />
+          <Image
+            style={styles.moneyIcon}
+            resizeMode="center"
+            source={require('../../../../assets/images/calculator_icon.png')}
+          />
           <View style={styles.innerIncomeExpenseView}>
             <Text style={styles.price}>Rs. 52,789</Text>
             <Text style={styles.incomeText}>Expense</Text>
@@ -117,22 +136,28 @@ const Statistics = ({ navigation }) => {
         </View>
       </View>
 
-
       <View style={styles.buttonView}>
-        <Button btnTitleStyle={styles.incomeBtnText} style={styles.incomeButton} title='Income' />
-        <Button btnTitleStyle={styles.expenseBtnText} style={styles.expenseButton} title='Expense' />
-
+        <Button
+          onPress={() => navigation.navigate('Budget')}
+          btnTitleStyle={styles.incomeBtnText}
+          style={styles.incomeButton}
+          title="Budget"
+        />
+        <Button
+          onPress={() => navigation.navigate('Trends')}
+          btnTitleStyle={styles.expenseBtnText}
+          style={styles.expenseButton}
+          title="Trends"
+        />
       </View>
 
       <View style={styles.transactionsView}>
         <Text style={styles.transactionsText}>Transactions</Text>
         <Text style={styles.viewAllText}>View All</Text>
       </View>
-      <FlatlistComponent
-        data={transactions}
-      />
+      <FlatlistComponent data={transactions} />
     </ScrollView>
-  )
-}
+  );
+};
 
-export default Statistics
+export default Statistics;

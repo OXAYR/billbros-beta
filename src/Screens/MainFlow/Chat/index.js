@@ -31,7 +31,7 @@ const INR_TO_USD_CONVERSION_RATE = 0.012; // Example conversion rate
 const ChatScreen = ({route, navigation}) => {
   const dispatch = useDispatch();
   const {stripe, loading, error} = useSelector(state => state.stripe);
-  const {selectedParticipants, totalBill, id} = route.params;
+  const {selectedParticipants, totalBill, groupId} = route.params;
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [isModalVisible, setModalVisible] = useState(false);
@@ -39,11 +39,12 @@ const ChatScreen = ({route, navigation}) => {
   const [newTotalAmount, setNewTotalAmount] = useState('');
   const [userShareAmount, setUserShareAmount] = useState(null);
   const [adminId, setAdminId] = useState('');
+  const [groupName, setGroupName] = useState('');
   const [userShareMsg, setUserShareMsg] = useState('');
   const name = useSelector(state => state.reducer.user.username);
   const currentUser = firebase.auth().currentUser;
   const {createPaymentMethod} = useStripe();
-  const chatId = id;
+  const chatId = groupId;
 
   useEffect(() => {
     const unsubscribe = firebase
@@ -81,6 +82,8 @@ const ChatScreen = ({route, navigation}) => {
         .get();
       const chatData = chatDoc.data();
       setAdminId(chatData.adminId);
+      console.log('herea reh te group chats----->', chatData.Name);
+      setGroupName(chatData.Name);
       const userShare = chatData.shares.find(
         share => share.userId === currentUser.uid,
       );
@@ -293,8 +296,9 @@ const ChatScreen = ({route, navigation}) => {
     <StripeProvider publishableKey="your_publishable_key_here">
       <View style={styles.container}>
         <Header
+          backgroundColor={'transparent'}
           onPress={() => navigation.goBack()}
-          title={`Group Chat ${totalBill}`}
+          title={groupName}
         />
         <GiftedChat
           messages={messages}
