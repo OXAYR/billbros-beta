@@ -24,6 +24,7 @@ const Payment = ({navigation}) => {
   const [groupName, setGroupName] = useState('');
   const [totalBill, setTotalBill] = useState('');
   const [activeTab, setActiveTab] = useState('users');
+  const [splitAmount, setSplitAmount] = useState(0);
 
   useEffect(() => {
     fetchUsers();
@@ -140,6 +141,10 @@ const Payment = ({navigation}) => {
         Alert.alert('Error', 'A group with these participants already exists');
         return;
       }
+      const shares = participantIds.map(id => ({
+        userId: id,
+        shareAmount: (amountInPKR / participantIds.length).toFixed(2) || 0,
+      }));
 
       const chatData = {
         Name: groupName,
@@ -147,6 +152,7 @@ const Payment = ({navigation}) => {
         adminId: currentUser.uid,
         totalBill: amountInPKR,
         totalBillUSD: amountInUSD,
+        shares,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -186,7 +192,7 @@ const Payment = ({navigation}) => {
       )}
       <TouchableOpacity style={styles.button} onPress={toggleModal}>
         <Text style={styles.buttonText}>
-          Create Group ({selectedParticipants.length})
+          Create Group ({selectedParticipants.length + 1})
         </Text>
       </TouchableOpacity>
     </ScrollView>

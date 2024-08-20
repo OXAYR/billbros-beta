@@ -24,6 +24,7 @@ import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
+import firestore from '@react-native-firebase/firestore';
 
 const MINIMUM_AMOUNT_IN_USD = 0.5;
 const INR_TO_USD_CONVERSION_RATE = 0.012; // Example conversion rate
@@ -45,6 +46,8 @@ const ChatScreen = ({route, navigation}) => {
   const currentUser = firebase.auth().currentUser;
   const {createPaymentMethod} = useStripe();
   const chatId = groupId;
+  const [hasCard, setHasCard] = useState(false);
+  const [showAddCardModal, setShowAddCardModal] = useState(false);
 
   useEffect(() => {
     const unsubscribe = firebase
@@ -93,6 +96,59 @@ const ChatScreen = ({route, navigation}) => {
     fetchChatData();
   }, [chatId, currentUser.uid]);
 
+  useEffect(() => {
+    checkUserCard();
+  }, []);
+
+  const checkUserCard = async () => {
+    const userDoc = await firestore()
+      .collection('users')
+      .doc(currentUser.uid)
+      .get();
+    const userData = userDoc.data();
+    setHasCard(userData?.cards && userData.cards.length > 0);
+  };
+
+  const handlePayButtonPress = () => {
+    if (hasCard) {
+      toggleModal();
+    } else {
+      setShowAddCardModal(true);
+    }
+  };
+
+  const handleAddCard = async cardData => {
+    try {
+      await firestore()
+        .collection('users')
+        .doc(currentUser.uid)
+        .update({
+          cards: firestore.FieldValue.arrayUnion(cardData),
+        });
+      setHasCard(true);
+    } catch (error) {
+      console.error('Error adding card:', error);
+      Alert.alert('Error', 'Failed to add card. Please try again.');
+    }
+  };
+
+  const navigateToCardScreen = () => {
+    setShowAddCardModal(false);
+    Alert.alert('Success', 'Card added successfully', [
+      {
+        text: 'OK',
+        onPress: () => {
+          console.log('OK Pressed');
+
+          if (hasCard) {
+            toggleModal();
+          }
+        },
+      },
+    ]);
+  };
+
+  const userName = useSelector(state => state.reducer.user);
   const onSend = useCallback(
     (messages = []) => {
       const message = messages[0];
@@ -106,11 +162,11 @@ const ChatScreen = ({route, navigation}) => {
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           user: {
             id: currentUser.uid,
-            name: currentUser.displayName,
+            name: userName.username,
           },
         });
     },
-    [chatId, currentUser.uid, currentUser.displayName],
+    [chatId, currentUser.uid, userName.username],
   );
 
   const toggleModal = () => {
@@ -120,8 +176,7 @@ const ChatScreen = ({route, navigation}) => {
   const handleUpdateTotal = async () => {
     const amountInINR = parseFloat(newTotalAmount);
     const amountInUSD = amountInINR * INR_TO_USD_CONVERSION_RATE;
-
-    if (amountInUSD < MINIMUM_AMOUNT_IN_USD) {
+    if (!newTotalAmount || amountInUSD < MINIMUM_AMOUNT_IN_USD) {
       setUpdateModalVisible(false);
       Alert.alert(
         `The total amount must be at least ${Math.ceil(
@@ -151,6 +206,21 @@ const ChatScreen = ({route, navigation}) => {
         };
       }
     });
+    const message = {
+      text: `${name} updated the total amount to Rs:${newTotalAmount} PKR.`,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      user: {
+        id: currentUser.uid,
+        name: currentUser.displayName,
+      },
+      isUpdateMessage: true,
+    };
+    await firebase
+      .firestore()
+      .collection('chats')
+      .doc(chatId)
+      .collection('messages')
+      .add(message);
 
     await firebase
       .firestore()
@@ -174,7 +244,6 @@ const ChatScreen = ({route, navigation}) => {
       },
       isPaymentMessage: true,
     };
-
     await firebase
       .firestore()
       .collection('chats')
@@ -197,9 +266,23 @@ const ChatScreen = ({route, navigation}) => {
     await firebase.firestore().collection('chats').doc(chatId).update({
       shares: updatedShares,
     });
+    const transaction = {
+      name: `Group ${groupName}: ${userShareMsg}`,
+      icon: require('../../../../assets/images/green_cash.png'),
+      time: new Date().toISOString(),
+      price: amount,
+      color: 'green',
+    };
+    await firestore()
+      .collection('users')
+      .doc(currentUser.uid)
+      .update({
+        transaction: firestore.FieldValue.arrayUnion(transaction),
+      });
 
     setUserShareAmount(0);
   };
+  console.log('here are the usere ipn the caht ------>', userName.username);
 
   const handleCardInput = async () => {
     const amount = Math.ceil(userShareAmount);
@@ -226,11 +309,19 @@ const ChatScreen = ({route, navigation}) => {
   };
 
   const renderBubble = props => {
-    const {isPaymentMessage} = props.currentMessage;
+    const {isPaymentMessage, isUpdateMessage} = props.currentMessage;
     if (isPaymentMessage) {
       return (
         <View style={styles.paymentBubbleContainer}>
           <Text style={styles.paymentBubbleText}>
+            {props.currentMessage.text}
+          </Text>
+        </View>
+      );
+    } else if (isUpdateMessage) {
+      return (
+        <View style={styles.paymentUpdateContainer}>
+          <Text style={styles.paymentUpdateText}>
             {props.currentMessage.text}
           </Text>
         </View>
@@ -241,7 +332,7 @@ const ChatScreen = ({route, navigation}) => {
         {...props}
         wrapperStyle={{
           left: {backgroundColor: '#e9f3db'},
-          right: {backgroundColor: '#588157'}, // Change to green
+          right: {backgroundColor: '#588157'},
         }}
         textStyle={{
           left: {color: '#000'},
@@ -266,7 +357,7 @@ const ChatScreen = ({route, navigation}) => {
         <TouchableOpacity
           style={styles.payButton}
           onPress={() => setUpdateModalVisible(true)}>
-          <Text style={styles.payButtonText}>Add New</Text>
+          <Text style={styles.payButtonText}>+</Text>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
@@ -274,7 +365,7 @@ const ChatScreen = ({route, navigation}) => {
             styles.payButton,
             userShareAmount === 0 && styles.payButtonDisabled,
           ]}
-          onPress={userShareAmount === 0 ? null : toggleModal}
+          onPress={userShareAmount === 0 ? null : handlePayButtonPress}
           disabled={userShareAmount === 0}>
           <Text style={styles.payButtonText}>
             {userShareAmount === 0 ? 'Paid' : 'Pay'}
@@ -293,72 +384,97 @@ const ChatScreen = ({route, navigation}) => {
   }
 
   return (
-    <StripeProvider publishableKey="your_publishable_key_here">
-      <View style={styles.container}>
-        <Header
-          backgroundColor={'transparent'}
-          onPress={() => navigation.goBack()}
-          title={groupName}
-        />
-        <GiftedChat
-          messages={messages}
-          onSend={messages => onSend(messages)}
-          user={{_id: currentUser.uid}}
-          renderBubble={renderBubble}
-          renderInputToolbar={renderInputToolbar}
-          renderUsernameOnMessage
-          showUserAvatar
-        />
-        <Modal
-          isVisible={isModalVisible}
-          onBackdropPress={toggleModal}
-          backdropOpacity={0.3}
-          animationIn="slideInUp"
-          animationOut="slideOutDown">
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Pay Your Share</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={`Rs: ${userShareAmount} PKR`}
-              editable={false}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Add Payment Message"
-              onChangeText={text => setUserShareMsg(text)}
-              value={userShareMsg}
-            />
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={handleCardInput}>
-              <Text style={styles.modalButtonText}>Pay Now</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-        <Modal
-          isVisible={isUpdateModalVisible}
-          onBackdropPress={() => setUpdateModalVisible(false)}
-          backdropOpacity={0.3}
-          animationIn="slideInUp"
-          animationOut="slideOutDown">
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Amount</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter new total amount"
-              keyboardType="numeric"
-              onChangeText={text => setNewTotalAmount(text)}
-              value={newTotalAmount}
-            />
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={handleUpdateTotal}>
-              <Text style={styles.modalButtonText}>Update</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </View>
-    </StripeProvider>
+    <View style={styles.container}>
+      <Header
+        backgroundColor={'transparent'}
+        onPress={() => navigation.goBack()}
+        title={groupName}
+      />
+      <GiftedChat
+        messages={messages}
+        onSend={messages => onSend(messages)}
+        user={{_id: currentUser.uid, name: userName.username}}
+        renderBubble={renderBubble}
+        renderInputToolbar={renderInputToolbar}
+        renderUsernameOnMessage={true}
+        showUserAvatar
+      />
+      <Modal
+        isVisible={isModalVisible}
+        onBackdropPress={toggleModal}
+        backdropOpacity={0.3}
+        animationIn="slideInUp"
+        animationOut="slideOutDown">
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Pay Your Share</Text>
+          <TextInput
+            style={styles.modalInput}
+            value={`Rs: ${userShareAmount} PKR`}
+            editable={false}
+          />
+          <TextInput
+            style={styles.modalInput}
+            placeholder="Add Payment Message"
+            onChangeText={text => setUserShareMsg(text)}
+            value={userShareMsg}
+          />
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={handleCardInput}>
+            <Text style={styles.modalButtonText}>Pay Now</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+      <Modal
+        isVisible={isUpdateModalVisible}
+        onBackdropPress={() => setUpdateModalVisible(false)}
+        backdropOpacity={0.3}
+        animationIn="slideInUp"
+        animationOut="slideOutDown">
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Add New Amount</Text>
+          <TextInput
+            style={styles.modalInput}
+            placeholder="Enter new total amount"
+            keyboardType="numeric"
+            onChangeText={text => setNewTotalAmount(text)}
+            value={newTotalAmount}
+          />
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={handleUpdateTotal}>
+            <Text style={styles.modalButtonText}>Update</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+      <Modal
+        isVisible={showAddCardModal}
+        onBackdropPress={() => setShowAddCardModal(false)}
+        backdropOpacity={0.3}
+        animationIn="slideInUp"
+        animationOut="slideOutDown">
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Add a Card</Text>
+          <CreditCardInput
+            onChange={formData => {
+              if (formData.valid) {
+                handleAddCard({
+                  number: formData.values.number,
+                  expiry: formData.values.expiry,
+                  cvc: formData.values.cvc,
+                  type: formData.values.type,
+                });
+              }
+            }}
+          />
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={navigateToCardScreen}>
+            <Text style={styles.modalButtonText}>Add Card </Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -439,13 +555,27 @@ const styles = StyleSheet.create({
   },
   paymentBubbleContainer: {
     backgroundColor: '#aad576',
-    borderTopEndRadius: wp(12),
-    borderBottomLeftRadius: wp(12),
+    borderTopEndRadius: wp(5),
+    borderBottomLeftRadius: wp(5),
+    borderBottomRightRadius: wp(12),
     borderTopLeftRadius: wp(12),
     padding: wp(10),
     marginVertical: wp(5),
   },
   paymentBubbleText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  paymentUpdateContainer: {
+    backgroundColor: '#aad576',
+    borderTopEndRadius: wp(5),
+    borderBottomLeftRadius: wp(5),
+    borderBottomRightRadius: wp(12),
+    borderTopLeftRadius: wp(12),
+    padding: wp(10),
+    marginVertical: wp(5),
+  },
+  paymentUpdateText: {
     color: '#fff',
     fontWeight: 'bold',
   },

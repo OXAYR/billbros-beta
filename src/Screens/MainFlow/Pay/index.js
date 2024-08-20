@@ -34,7 +34,7 @@ const Pay = ({navigation}) => {
           id: doc.id,
           ...doc.data(),
         }));
-        console.log('Fetched groups:', groupsData);
+        console.log('Fetched groups: in the pay screen ----->', groupsData);
         setGroups(groupsData);
       } else {
         console.error('No current user logged in');

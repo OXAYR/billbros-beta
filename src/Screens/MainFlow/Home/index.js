@@ -4,16 +4,18 @@ import Text from '../../../Components/Text';
 import {styles} from './style';
 import FlatlistComponent from '../../../Components/FlatList';
 import Card from '../../../Components/Card';
-import {useDispatch, useSelector} from 'react-redux';
+import {useSelector} from 'react-redux';
 import auth from '@react-native-firebase/auth';
-import {useIsFocused} from '@react-navigation/native';
-import {setToken, setUser} from '../../../Redux/reducer';
 import firestore from '@react-native-firebase/firestore';
+import {firebase} from '@react-native-firebase/auth';
 
 const Home = ({navigation}) => {
-  const focused = useIsFocused();
-  const dispatch = useDispatch();
+  const [activeTab, setActiveTab] = useState('transactions');
+  const [userCards, setUserCards] = useState([]);
+  const [recentGroups, setRecentGroups] = useState([]);
+
   useEffect(() => {
+    fetchRecentGroups();
     fetchUserCards();
   }, []);
 
@@ -26,54 +28,25 @@ const Home = ({navigation}) => {
     }
   };
 
-  // const fetchCurrentUser = async () => {
-  //   // Fetch details of the currently logged-in user
-  //   const currentUser = auth().currentUser;
+  const fetchRecentGroups = async () => {
+    const currentUser = auth().currentUser.uid;
+    if (currentUser) {
+      const groupsSnapshot = await firebase
+        .firestore()
+        .collection('chats')
+        .where('participantIds', 'array-contains', currentUser.uid)
+        .get();
+      const groupsData = groupsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      console.log('Fetched groups in the home :', groupsData);
+      setRecentGroups(groupsData);
+    } else {
+      console.error('No current user logged in');
+    }
+  };
 
-  //   // You can then access the user's details
-  //   if (currentUser) {
-  //     const uid = currentUser.uid;
-  //     console.log('HOME UID', uid);
-  //     const userRef = firestore().collection('users').doc(uid);
-  //     const userDoc = await userRef.get();
-
-  //     if (userDoc.exists) {
-  //       const userData = userDoc.data();
-  //       console.log('User data from Firestore:', userData);
-  //       dispatch(setUser(userData.username))
-  //       // Do something with userData
-  //     } else {
-  //       console.log('No user data found in Firestore.');
-  //     }
-  //   } else {
-  //     console.log('No user signed in.');
-  //   }
-  // }
-  // const name = useSelector((state) => state?.reducer?.user);
-  // console.log('NAME welcome screen', name)
-
-  // useEffect(() => {
-  //   focused && fetchCurrentUser()
-  // }, [focused])
-
-  const buttons = [
-    {
-      name: 'Tutorial',
-      icon: require('../../../../assets/images/tutorial_icon.png'),
-    },
-    {
-      name: 'Send Money',
-      icon: require('../../../../assets/images/send_money_icon.png'),
-    },
-    {
-      name: 'Payment',
-      icon: require('../../../../assets/images/payment_icon.png'),
-    },
-    {
-      name: 'Request',
-      icon: require('../../../../assets/images/request_icon.png'),
-    },
-  ];
   const transactions = [
     {
       name: 'Salary',
@@ -104,54 +77,90 @@ const Home = ({navigation}) => {
       color: 'green',
     },
   ];
+
   const name = useSelector(state => state.reducer.user);
-  console.log('NAME', name);
-  const [cardData, setCardData] = useState(null);
-  const [userCards, setUserCards] = useState([]);
-  return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      style={styles.mainContainer}>
-      <View style={styles.detailView}>
-        <View style={styles.morningView}>
-          <Text style={styles.morningText}>Good morning,</Text>
-          <Text style={styles.name}>
-            {name?.username ? name?.username : 'User'} !
-          </Text>
-        </View>
-        <View style={styles.profileView}>
-          <Image
-            resizeMode="center"
-            style={styles.notificationIcon}
-            source={require('../../../../assets/images/notification_icon.png')}
-          />
-          <TouchableOpacity
-            style={styles.personIcon}
-            onPress={() => navigation.navigate('Profile')}>
-            <Image
-              style={styles.personIcon}
-              resizeMode="center"
-              source={require('../../../../assets/images/person_icon.png')}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
 
-      {userCards.map((card, index) => (
-        <Card
-          key={index}
-          cardNumber={card.number}
-          cardHolderName={card.name}
-          expiryDate={card.expiry}
-        />
-      ))}
-
+  const renderTransactions = () => (
+    <>
       <View style={styles.transactionsView}>
         <Text style={styles.transactionsText}>Transactions</Text>
         <Text style={styles.viewAllText}>View All</Text>
       </View>
       <FlatlistComponent data={transactions} />
-    </ScrollView>
+    </>
+  );
+
+  const renderRecentChats = () => (
+    <View style={styles.groupsContainer}>
+      <Text style={styles.groupsHeader}>Your Groups</Text>
+      {recentGroups.map((item, key) => (
+        <TouchableOpacity
+          key={key}
+          style={styles.groupItem}
+          onPress={() =>
+            navigation.navigate('Chat', {
+              groupId: item.id,
+              selectedParticipants: item.participantIds,
+              totalBill: item.totalBill,
+            })
+          }>
+          <Text style={styles.groupName}>{item.Name}</Text>
+          <Text style={styles.groupMembers}>
+            {item.participantIds.length} members
+          </Text>
+        </TouchableOpacity>
+      ))}
+      {recentGroups.length === 0 && (
+        <Text style={styles.emptyListText}>No groups found</Text>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.mainContainer}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.detailView}>
+          <View style={styles.morningView}>
+            <Text style={styles.morningText}>Good morning,</Text>
+            <Text style={styles.name}>
+              {name?.username ? name?.username : 'User'} !
+            </Text>
+          </View>
+          <View style={styles.profileView}>
+            <Image
+              resizeMode="center"
+              style={styles.notificationIcon}
+              source={require('../../../../assets/images/notification_icon.png')}
+            />
+            <TouchableOpacity
+              style={styles.personIcon}
+              onPress={() => navigation.navigate('Profile')}>
+              <Image
+                style={styles.personIcon}
+                resizeMode="center"
+                source={require('../../../../assets/images/person_icon.png')}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {userCards?.length > 0 ? (
+          userCards?.map((card, index) => (
+            <Card
+              key={index}
+              cardNumber={card.number}
+              cardHolderName={card.name}
+              expiryDate={card.expiry}
+            />
+          ))
+        ) : (
+          <Card />
+        )}
+
+        {activeTab === 'transactions'
+          ? renderTransactions()
+          : renderRecentChats()}
+      </ScrollView>
+    </View>
   );
 };
 
